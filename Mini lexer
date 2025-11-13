@@ -1,0 +1,100 @@
+# Mini_Lexer_Wydson.py
+# Autor: Wydson Felipe - Unic Beira Rio
+# Exemplo simples de lexer que demonstra linguagens formais e autômatos.
+
+import re
+from enum import Enum, auto
+from dataclasses import dataclass
+from typing import List
+
+class TokenType(Enum):
+    KEYWORD = auto()
+    IDENTIFIER = auto()
+    NUMBER = auto()
+    OPERATOR = auto()
+    SEPARATOR = auto()
+    STRING = auto()
+    COMMENT = auto()
+    UNKNOWN = auto()
+
+@dataclass
+class Token:
+    type: TokenType
+    lexeme: str
+    position: int
+
+    def __repr__(self):
+        return f"{self.type.name}('{self.lexeme}')@{self.position}"
+
+KEYWORDS = {"if", "else", "while", "return", "int", "float", "print"}
+
+# Padrões simples (expressões regulares)
+TOKEN_SPECIFICATION = [
+    ("NUMBER",   r"\b\d+(\.\d+)?\b"),       # números inteiros e decimais
+    ("STRING",   r"\"(\\.|[^\"])*\""),     # textos entre aspas
+    ("ID",       r"[A-Za-z_][A-Za-z0-9_]*"),# identificadores
+    ("OP",       r"==|!=|<=|>=|[+\-*/=<>]"),# operadores
+    ("SEP",      r"[;,(){}]"),             # separadores
+    ("COMMENT",  r"//[^\n]*"),             # comentários
+    ("SKIP",     r"[ \t\r\n]+"),           # espaços
+    ("MISMATCH", r".")                     # qualquer outro caractere
+]
+
+master_pattern = re.compile("|".join(f"(?P<{name}>{pattern})" for name, pattern in TOKEN_SPECIFICATION))
+
+def identifier_dfa_accepts(s: str) -> bool:
+    # DFA simples: primeiro caractere letra ou '_', depois letras/dígitos/'_'
+    if not s:
+        return False
+    if not (s[0].isalpha() or s[0] == "_"):
+        return False
+    for ch in s[1:]:
+        if not (ch.isalnum() or ch == "_"):
+            return False
+    return True
+
+class MiniLexer:
+    def __init__(self, text: str):
+        self.text = text
+
+    def tokenize(self) -> List[Token]:
+        tokens: List[Token] = []
+        for mo in master_pattern.finditer(self.text):
+            kind = mo.lastgroup
+            value = mo.group()
+            pos = mo.start()
+            if kind == "NUMBER":
+                tokens.append(Token(TokenType.NUMBER, value, pos))
+            elif kind == "STRING":
+                tokens.append(Token(TokenType.STRING, value, pos))
+            elif kind == "ID":
+                if value in KEYWORDS:
+                    tokens.append(Token(TokenType.KEYWORD, value, pos))
+                elif identifier_dfa_accepts(value):
+                    tokens.append(Token(TokenType.IDENTIFIER, value, pos))
+                else:
+                    tokens.append(Token(TokenType.UNKNOWN, value, pos))
+            elif kind == "OP":
+                tokens.append(Token(TokenType.OPERATOR, value, pos))
+            elif kind == "SEP":
+                tokens.append(Token(TokenType.SEPARATOR, value, pos))
+            elif kind == "COMMENT":
+                tokens.append(Token(TokenType.COMMENT, value, pos))
+            elif kind == "SKIP":
+                continue
+            else:
+                tokens.append(Token(TokenType.UNKNOWN, value, pos))
+        return tokens
+
+if __name__ == "__main__":
+    sample_code = '''
+    // Exemplo simples
+    int contador = 0;
+    while (contador < 5) {
+        print("Valor = " + contador);
+        contador = contador + 1;
+    }
+    '''
+    lexer = MiniLexer(sample_code)
+    for token in lexer.tokenize():
+        print(token)
